@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>8-Lane Piano Tiles</title>
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 18px 10px 30px;
+    background: #171717;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+h1 { margin: 8px 0 12px; }
+#score { font-size: 24px; margin: 12px; }
+#controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 12px auto 18px;
+}
+.control-choice, #startButton {
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+}
+.control-choice {
+    color: white;
+    background: #444;
+}
+.control-choice.selected { background: #2563eb; }
+#startButton {
+    margin: 16px;
+    padding: 12px 28px;
+    background: #16a34a;
+    color: white;
+    font-size: 17px;
+}
+#startButton:hover { background: #15803d; }
+#hint { color: #ccc; font-size: 14px; margin: 8px; }
+#game {
+    width: min(96vw, 560px);
+    height: min(68vh, 560px);
+    min-height: 360px;
+    margin: auto;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    background: white;
+    border: 4px solid #555;
+    touch-action: manipulation;
+}
+.lane {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    position: relative;
+    border-right: 1px solid #999;
+    background: #f5f5f5;
+}
+.lane:last-child { border-right: 0; }
+.tile {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 110px;
+    background: #080808;
+    border: 1px solid #555;
+    cursor: pointer;
+}
+@media (max-width: 420px) {
+    #game { height: 65vh; min-height: 330px; }
+    .tile { height: 95px; }
+}
+</style>
+</head>
+<body>
+<h1>🎹 Piano Tiles</h1>
+<div id="score">Score: 0</div>
+
+<div id="controls" aria-label="Choose controls">
+    <strong>Controls:</strong>
+    <button class="control-choice selected" id="mouseChoice" type="button">Mouse / Touch</button>
+    <button class="control-choice" id="keyboardChoice" type="button">Keyboard</button>
+</div>
+<div id="hint">Click or tap the black tiles to play.</div>
+
+<div id="game">
+    <div class="lane" id="lane0"></div>
+    <div class="lane" id="lane1"></div>
+    <div class="lane" id="lane2"></div>
+    <div class="lane" id="lane3"></div>
+    <div class="lane" id="lane4"></div>
+    <div class="lane" id="lane5"></div>
+    <div class="lane" id="lane6"></div>
+    <div class="lane" id="lane7"></div>
+</div>
+
+<button id="startButton" type="button">Start Game</button>
+
+<script>
+const game = document.getElementById("game");
+const scoreDisplay = document.getElementById("score");
+const hint = document.getElementById("hint");
+const mouseChoice = document.getElementById("mouseChoice");
+const keyboardChoice = document.getElementById("keyboardChoice");
+const startButton = document.getElementById("startButton");
+
+const laneCount = 8;
+const keyboardKeys = ["a", "s", "d", "f", "j", "k", "l", ";"];
+
+let score = 0;
+let speed = 4.5;             // 1.5 times the previous 3 px/frame
+let tiles = [];
+let running = false;
+let spawnTimer = null;
+let animation = null;
+let controlMode = "mouse";
+let lastSpawnTime = 0;
+
+function chooseControl(mode) {
+    if (running) {
+        alert("Please finish or restart the game before changing controls.");
+        return;
+    }
+
+    controlMode = mode;
+    mouseChoice.classList.toggle("selected", mode === "mouse");
+    keyboardChoice.classList.toggle("selected", mode === "keyboard");
+
+    hint.textContent = mode === "mouse"
+        ? "Mouse / Touch mode: click or tap the black tiles."
+        : "Keyboard mode: use A, S, D, F, J, K, L and ; for lanes 1–8.";
+}
+
+mouseChoice.addEventListener("click", () => chooseControl("mouse"));
+keyboardChoice.addEventListener("click", () => chooseControl("keyboard"));
+
+function startGame() {
+    clearInterval(spawnTimer);
+    cancelAnimationFrame(animation);
+
+    tiles.forEach(tile => tile.element.remove());
+    tiles = [];
+
+    score = 0;
+    speed = 4.5;
+    running = true;
+    scoreDisplay.textContent = "Score: 0";
+    startButton.textContent = "Restart Game";
+
+    spawnTile();
+    // Previous interval was 850 ms; 1.5x faster means a shorter interval.
+    spawnTimer = setInterval(spawnTile, Math.round(850 / 1.5));
+    animation = requestAnimationFrame(gameLoop);
+}
+
+function spawnTile() {
+    if (!running) return;
+
+    const laneNumber = Math.floor(Math.random() * laneCount);
+    const lane = document.getElementById("lane" + laneNumber);
+
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.style.top = "-110px";
+    lane.appendChild(tile);
+
+    const tileData = {
+        element: tile,
+        y: -110,
+        lane: laneNumber,
+        clicked: false
+    };
+
+    tiles.push(tileData);
+
+    tile.addEventListener("click", () => {
+        if (controlMode === "mouse") hitTile(tileData);
+    });
+}
+
+function hitTile(tile) {
+    if (!running || tile.clicked) return;
+
+    tile.clicked = true;
+    tile.element.remove();
+
+    score++;
+    scoreDisplay.textContent = "Score: " + score;
+
+    // Increase falling speed gradually as the score rises.
+    speed = 4.5 + Math.floor(score / 10) * 0.5;
+    tiles = tiles.filter(item => item !== tile);
+}
+
+function gameLoop() {
+    if (!running) return;
+
+    for (const tile of [...tiles]) {
+        if (!tile.clicked) {
+            tile.y += speed;
+            tile.element.style.top = tile.y + "px";
+
+            if (tile.y > game.clientHeight) {
+                endGame();
+                return;
+            }
+        }
+    }
+
+    animation = requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+    running = false;
+    clearInterval(spawnTimer);
+    cancelAnimationFrame(animation);
+    startButton.textContent = "Play Again";
+    alert("Game Over! Your score: " + score);
+}
+
+document.addEventListener("keydown", event => {
+    if (!running || controlMode !== "keyboard" || event.repeat) return;
+
+    const key = event.key.toLowerCase();
+    const laneNumber = keyboardKeys.indexOf(key);
+
+    if (laneNumber === -1) return;
+
+    event.preventDefault();
+
+    const available = tiles
+        .filter(tile => tile.lane === laneNumber && !tile.clicked)
+        .sort((a, b) => b.y - a.y);
+
+    if (available.length > 0) {
+        hitTile(available[0]);
+    } else {
+        endGame();
+    }
+});
+
+startButton.addEventListener("click", startGame);
+</script>
+</body>
+</html>
